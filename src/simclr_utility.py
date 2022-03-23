@@ -1,48 +1,40 @@
+"Adapted from the code (https://github.com/iantangc/ContrastiveLearningHAR) contributed by iantangc"
 import numpy as np
 import os
 import tensorflow as tf
-from src.data_aug import *
 import tensorflow.keras.backend as K
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense,BatchNormalization,Activation
+from src.data_aug import *
 
-def get_NT_Xent_loss_gradients(model, samples_transform_1, samples_transform_2, normalize=True, temperature=1.0, weights=1.0):
+
+def attach_simclr_head(base_model, hidden_1=128, hidden_2=64):
     """
-    A wrapper function for the NT_Xent_loss function which facilitates back propagation
+    Attach a 3-layer fully-connected encoding head
 
-    Parameters:
-        model
-            the deep learning model for feature learning 
-
-        samples_transform_1
-            inputs samples subject to transformation 1
-        
-        samples_transform_2
-            inputs samples subject to transformation 2
-
-        normalize = True
-            normalise the activations if true
-
-        temperature = 1.0
-            hyperparameter, the scaling factor of the logits
-            (see NT_Xent_loss)
-        
-        weights = 1.0
-            weights of different samples
-            (see NT_Xent_loss)
-
-    Return:
-        loss
-            the value of the NT_Xent_loss
-
-        gradients
-            the gradients for backpropagation
+    Architecture:
+        base_model
+        -> Dense: hidden_1 units
+        -> ReLU
+        -> Dense: hidden_2 units
+        -> ReLU
+        -> Dense: hidden_3 units
     """
-    with tf.GradientTape() as tape:
-        hidden_features_transform_1 = model(samples_transform_1)
-        hidden_features_transform_2 = model(samples_transform_2)
-        loss = NT_Xent_loss(hidden_features_transform_1, hidden_features_transform_2, normalize=normalize, temperature=temperature, weights=weights)
 
-    gradients = tape.gradient(loss, model.trainable_variables)
-    return loss, gradients
+    r=1e-3
+
+    inputs = base_model.input
+    x = base_model.output
+
+    projection_1 = Dense(hidden_1, activation=None, kernel_regularizer=tf.keras.regularizers.l2(l=r))(x)
+    projection_1 = BatchNormalization()(projection_1)
+    projection_1 = Activation("relu")(projection_1)
+    projection_2 = Dense(hidden_2, activation=None,kernel_regularizer=tf.keras.regularizers.l2(l=r))(projection_1)
+    projection_2 = BatchNormalization()(projection_2)
+
+    simclr_model = Model(inputs, projection_2, name= base_model.name + "_simclr")
+
+    return simclr_model
 
 
 def simclr_train_model(model, dataset, optimizer, batch_size, temperature=1.0, epochs=100, verbose=0):
@@ -110,16 +102,58 @@ def simclr_train_model(model, dataset, optimizer, batch_size, temperature=1.0, e
 
         epoch_wise_loss.append(np.mean(step_wise_loss))
         
-        if verbose > 0:
-            print("Epoch {} loss: {:.3f}".format(epoch + 1, np.mean(step_wise_loss)))
+        # if verbose > 0:
+        #     print("Epoch {} loss: {:.3f}".format(epoch + 1, np.mean(step_wise_loss)))
 
-        if epoch%5==0:
+        if epoch%10==0:
+            print("Epoch {} loss: {:.3f}".format(epoch, np.mean(step_wise_loss)))
             model.save("./saved_models/simclr/weight_"+str(epoch)+".hdf5")
             print("Write to \'saved_models/simclr/weight_"+str(epoch)+".hdf5\'")
 
         model.save("./saved_models/weight_simclr.hdf5")
 
     return model, epoch_wise_loss
+
+
+def get_NT_Xent_loss_gradients(model, samples_transform_1, samples_transform_2, normalize=True, temperature=1.0, weights=1.0):
+    """
+    A wrapper function for the NT_Xent_loss function which facilitates back propagation
+
+    Parameters:
+        model
+            the deep learning model for feature learning 
+
+        samples_transform_1
+            inputs samples subject to transformation 1
+        
+        samples_transform_2
+            inputs samples subject to transformation 2
+
+        normalize = True
+            normalise the activations if true
+
+        temperature = 1.0
+            hyperparameter, the scaling factor of the logits
+            (see NT_Xent_loss)
+        
+        weights = 1.0
+            weights of different samples
+            (see NT_Xent_loss)
+
+    Return:
+        loss
+            the value of the NT_Xent_loss
+
+        gradients
+            the gradients for backpropagation
+    """
+    with tf.GradientTape() as tape:
+        hidden_features_transform_1 = model(samples_transform_1)
+        hidden_features_transform_2 = model(samples_transform_2)
+        loss = NT_Xent_loss(hidden_features_transform_1, hidden_features_transform_2, normalize=normalize, temperature=temperature, weights=weights)
+
+    gradients = tape.gradient(loss, model.trainable_variables)
+    return loss, gradients
 
 
 """

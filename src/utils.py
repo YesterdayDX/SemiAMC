@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from src.lstm import *
-from src.simclr_model import attach_simclr_head
+# from src.simclr_model import attach_simclr_head
 from src.simclr_utility import *
 from src.data_aug import *
 from tensorflow.keras.layers import Dense,Dropout
@@ -23,8 +23,12 @@ def normalize_data(X_train, X_train_labeled, X_val_labeled, X_test):
         X_val_labeled[i] = X_val_labeled[i]/m   
     return X_train, X_train_labeled, X_val_labeled, X_test
 
-def train_supervised(X_train_labeled, Y_train_labeled, X_val_labeled, Y_val_labeled, X_test, Y_test, batch_size=512, Epoch=500):
-
+def train_supervised(X_train_labeled, Y_train_labeled, X_val_labeled, Y_val_labeled, batch_size=512, Epoch=500):
+    '''
+    Train the model under the supervised way.
+    First build the whole model -- encoder + classifer layers.
+    Then train the model from very beginning.
+    '''
     encoder = model_LSTM(classes=11)
     inputs = encoder.inputs
 
@@ -38,7 +42,7 @@ def train_supervised(X_train_labeled, Y_train_labeled, X_val_labeled, Y_val_labe
     outputs = Dense(11, activation="softmax", name="linear_Classifier")(x)
     sup_model = Model(inputs=inputs, outputs=outputs, name="Sup_Model")
 
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.005)
     sup_model.compile(loss='categorical_crossentropy', metrics=['accuracy'], optimizer=optimizer)
     sup_model.summary()
 
@@ -60,7 +64,16 @@ def train_supervised(X_train_labeled, Y_train_labeled, X_val_labeled, Y_val_labe
 
     return sup_model
 
-def train_tune(X_train_labeled, Y_train_labeled, X_val_labeled, Y_val_labeled, X_test, Y_test, batch_size=512, Epoch=200):
+def train_tune(X_train_labeled, Y_train_labeled, X_val_labeled, Y_val_labeled, batch_size=512, Epoch=200):
+    '''
+    Self-supervised contrastive learning will train the encoder.
+    After that, we freeze the encoder and then build a classifier
+         on the output of the encoder.
+    Given the labeled training data, we will train the classifier
+         as well as tune several layers of the encoder. 
+    The number of layers to be tuned is related to the amount of
+        labeled data we have. More labeled training data --> more tuned layers.
+    '''
     # Load sim_model from file
     sim_model = tf.keras.models.load_model("./saved_models/weight_simclr.hdf5")
     
@@ -73,7 +86,6 @@ def train_tune(X_train_labeled, Y_train_labeled, X_val_labeled, Y_val_labeled, X
     x=Dropout(dr,name="DP_1")(x)
     x=Dense(128,activation="selu",name="FC1",kernel_regularizer=tf.keras.regularizers.l2(l=r))(x)
     x=Dropout(dr,name="DP_2")(x)
-    # x=Dense(128,activation="selu",name="FC2",kernel_regularizer=tf.keras.regularizers.l2(l=r))(x)
 
     outputs = Dense(11, activation="softmax", name="linear_Classifier")(x)
     tune_model = Model(inputs=inputs, outputs=outputs, name="Tune_Model")
@@ -83,12 +95,12 @@ def train_tune(X_train_labeled, Y_train_labeled, X_val_labeled, Y_val_labeled, X
 
     # We can choose # of layers to be tuned according to the amount of labeled training data we have.
     # We tune less layers when we have a smaller number of labeled data.
-    for layer in tune_model.layers[-8:]:
+    for layer in tune_model.layers[-6:]:
         layer.trainable = True
 
     tune_model.summary()
 
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.005)
     tune_model.compile(loss='categorical_crossentropy', metrics=['accuracy'], optimizer=optimizer)
     training_history = tune_model.fit(
         x = X_train_labeled,
@@ -111,6 +123,10 @@ def train_tune(X_train_labeled, Y_train_labeled, X_val_labeled, Y_val_labeled, X
     return tune_model
 
 def train_simclr(X_train, batch_size=512, Epoch=100, temperature = 0.1):
+    '''
+    We use simclr as the self-supervised model.
+    This function would train the encoder under the given unlabeled data.
+    '''
     decay_steps = 15000
 
     # Training
@@ -123,6 +139,8 @@ def train_simclr(X_train, batch_size=512, Epoch=100, temperature = 0.1):
     trained_simclr_model, epoch_losses = simclr_train_model(sim_model, X_train, optimizer, batch_size, temperature=temperature, epochs=Epoch, verbose=1)
 
     print("=========== Contrastive Training Completed! ==========")
+    print("Write model to \'saved_models/simclr/weight_simclr.hdf5\'")
+    print("Write epoch loss to \'./results/simclr/epoch_loss\'")
 
     # Save Training Loss
     np.savetxt('./results/epoch_loss.csv', epoch_losses)
@@ -141,6 +159,13 @@ def plot_epoch_loss(loss_file='./results/epoch_loss.csv'):
     plt.savefig('./results/epoch_loss.png')
 
 def compare_tune_and_sup(weight_tune, weight_sup, X_test, Y_test, test_idx, snrs, lbl, batch_size=512):
+    '''
+    In this function, we compare the performance for the tuned model (SemiAMC)
+        and the supervised model.
+    We study their
+        1. General accuracies under the test dataset.
+        2. Accuracies under different snrs.
+    '''
     tune_model = tf.keras.models.load_model(weight_tune)
     sup_model = tf.keras.models.load_model(weight_sup)
 

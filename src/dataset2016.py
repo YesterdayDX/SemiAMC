@@ -3,7 +3,7 @@ import pickle
 import numpy as np
 import math
    
-def load_data(filename, rate):
+def load_data(filename, size_train_labeled, size_val_labeled):
     '''
     RadioML2016.10a: (220000,2,128), mods*snr*1000, total 220000 samples
 
@@ -14,7 +14,8 @@ def load_data(filename, rate):
 
     Input: 
         filename: path of dataset
-        rate: # percentage of the labeled training data, rate = 2 means 2%.
+        size_train_labeled: [0,1000], # of labeled training samples
+        size_val_labeled: [0,1000], # of labeled validation samples
     Output:
         X_train, Y_train: all training data set
         X_val, Y_val: all validation data set
@@ -24,8 +25,8 @@ def load_data(filename, rate):
     '''
     # np.random.seed(1991)
 
-    size_train_labeled = round(rate * 500 / 100) # size_train_labeled: [0,1000], # of labeled training samples
-    size_val_labeled = round(math.ceil(size_train_labeled/2.0)) # size_val_labeled: [0,1000], # of labeled training samples
+    # size_train_labeled = round(rate * 500 / 100) # size_train_labeled: [0,1000], # of labeled training samples
+    # size_val_labeled = round(math.ceil(size_train_labeled/2.0)) # size_val_labeled: [0,1000], # of labeled training samples
 
     # RadioML2016.10a: (220000,2,128), mods*snr*1000, total 220000 samples; 
     Xd =pickle.load(open(filename,'rb'),encoding='iso-8859-1')

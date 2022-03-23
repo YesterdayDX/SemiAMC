@@ -1,3 +1,9 @@
+'''
+In this file, we implement the 'rotation' data augmentation operations 
+for modulation recognition mentioned in paper:
+    "Data Augmentation for Deep Learning-based Radio Modulation Classification"
+    https://arxiv.org/pdf/1912.03026.pdf
+'''
 import numpy as np
 
 def rotation_2d(x, ang=90):

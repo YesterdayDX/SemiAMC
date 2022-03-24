@@ -22,3 +22,18 @@ We use **RML2016.10a** as our dataset. Please go to https://www.deepsig.ai/datas
 
 ## Run the code
 We show how to run our code in **main.ipynb**.
+
+## Results
+Epoch loss while training the encoder  
+![image](https://user-images.githubusercontent.com/9064192/159833299-845e7be3-4e6c-4797-81e7-686a5a70ce98.png)
+
+Comparison between SemiAMC and supervised model (under different snrs)  
+![image](https://user-images.githubusercontent.com/9064192/159833396-5e0873a8-14fd-4bf7-b802-88bddcdc9aac.png)
+
+In 'saved_models/', we put three trained models:
++ weight_simclr.hdf5: weights for the encoder
++ weight_tune.hdf5: weights for the tuned model
++ weight_sup.hdf5: weights for the supervised model
+
+In 'saved_models/simclr/', the checkpoints while trainig the encoder will be stored here.
+

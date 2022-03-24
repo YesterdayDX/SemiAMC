@@ -1,0 +1,5 @@
+tensorflow-gpu == 2.4.0
+numpy == 1.19.5
+matplotlib == 3.2.1
+tensorflow-determinism
+
